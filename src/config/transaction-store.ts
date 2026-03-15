@@ -5,7 +5,7 @@ import { randomBytes } from "node:crypto";
 import type { Transaction } from "../api/types.js";
 
 interface TransactionStore {
-  last_synced?: string; // ISO timestamp of most recent transaction
+  last_synced?: string; // ID of the most recent transaction (used as cursor)
   account_id?: string;
   transactions: Transaction[];
 }

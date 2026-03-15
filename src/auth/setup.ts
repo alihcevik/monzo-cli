@@ -25,7 +25,9 @@ export async function ensureSetup(forceReset = false): Promise<Config> {
   console.log("   - Redirect URLs: http://localhost:7272/callback");
   console.log("   - Description:   leave blank");
   console.log("   - Confidentiality: select \"Confidential\"");
-  console.log("4. Copy the Client ID and Client Secret below.\n");
+  console.log("4. You may need to approve the client in your Monzo app.");
+  console.log("   If the client doesn't show up, check for a notification in the app.");
+  console.log("5. Copy the Client ID and Client Secret below.\n");
 
   const rl = createInterface({ input: stdin, output: stdout });
   try {

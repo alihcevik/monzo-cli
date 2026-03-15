@@ -67,7 +67,7 @@ export const transactionsCommand = new Command("transactions")
         });
         displayTransactions(txns);
         if (store.last_synced) {
-          console.log(`\n(Local data last synced: ${store.last_synced})`);
+          console.log(`\n(${store.transactions.length} transactions stored locally)`);
         }
         return;
       }

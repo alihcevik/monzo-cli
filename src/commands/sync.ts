@@ -27,10 +27,10 @@ export const syncCommand = new Command("sync")
     }
 
     let allNew: Awaited<ReturnType<typeof fetchTransactions>>["transactions"] = [];
-    let before: string | undefined;
     let page = 0;
 
-    // Paginate through all available transactions
+    // Paginate forward through all available transactions
+    // Monzo returns oldest-first, so we advance `since` to the last ID each page
     while (true) {
       page++;
       process.stdout.write(`  Fetching page ${page}...`);
@@ -38,7 +38,6 @@ export const syncCommand = new Command("sync")
       const { transactions } = await fetchTransactions({
         accountId,
         since,
-        before,
         limit: PAGE_SIZE,
       });
 
@@ -47,8 +46,8 @@ export const syncCommand = new Command("sync")
 
       if (transactions.length < PAGE_SIZE) break;
 
-      // Next page: fetch transactions created before the oldest in this batch
-      before = transactions[transactions.length - 1].created;
+      // Use the last transaction's ID as cursor for the next page
+      since = transactions[transactions.length - 1].id;
     }
 
     if (allNew.length === 0) {
@@ -62,10 +61,11 @@ export const syncCommand = new Command("sync")
       allNew,
     );
 
-    const newest = merged[0]?.created;
+    // Store the newest transaction's ID as cursor for next incremental sync
+    const newestId = merged[0]?.id;
 
     saveTransactionStore({
-      last_synced: newest,
+      last_synced: newestId,
       account_id: accountId,
       transactions: merged,
     });
