@@ -6,8 +6,34 @@ import {
   saveTransactionStore,
   mergeTransactions,
 } from "../config/transaction-store.js";
+import type { Transaction } from "../api/types.js";
 
 const PAGE_SIZE = 100;
+
+async function fetchAllInWindow(
+  accountId: string,
+  since: string,
+  before: string,
+): Promise<Transaction[]> {
+  let cursor: string = since;
+  const results: Transaction[] = [];
+
+  while (true) {
+    const { transactions } = await fetchTransactions({
+      accountId,
+      since: cursor,
+      before,
+      limit: PAGE_SIZE,
+    });
+
+    results.push(...transactions);
+
+    if (transactions.length < PAGE_SIZE) break;
+    cursor = transactions[transactions.length - 1].id;
+  }
+
+  return results;
+}
 
 export const syncCommand = new Command("sync")
   .description("Sync transactions to local storage for offline access")
@@ -17,40 +43,50 @@ export const syncCommand = new Command("sync")
     const accountId = await resolveAccountId(opts.account);
     const store = loadTransactionStore();
 
-    // Determine start point for incremental sync
-    // Monzo requires an explicit `since` to go back further than recent history.
-    // For full sync, use a date before Monzo existed to get everything.
-    let since: string | undefined;
-    if (!opts.full && store.last_synced && store.account_id === accountId) {
-      since = store.last_synced;
-      console.log(`Incremental sync from ${since}...`);
+    const isIncremental =
+      !opts.full && store.last_synced && store.account_id === accountId;
+
+    let allNew: Transaction[] = [];
+
+    if (isIncremental) {
+      // Incremental: single fetch from last cursor to now
+      console.log(`Incremental sync...`);
+      let cursor: string = store.last_synced!;
+
+      while (true) {
+        process.stdout.write(`  Fetching...`);
+        const { transactions } = await fetchTransactions({
+          accountId,
+          since: cursor,
+          limit: PAGE_SIZE,
+        });
+        console.log(` ${transactions.length} transactions`);
+        allNew.push(...transactions);
+
+        if (transactions.length < PAGE_SIZE) break;
+        cursor = transactions[transactions.length - 1].id;
+      }
     } else {
-      since = "2015-01-01T00:00:00Z";
+      // Full sync: chunk by year to avoid Monzo's ~1 year range limit
       console.log("Full sync — this may take a moment...");
-    }
 
-    let allNew: Awaited<ReturnType<typeof fetchTransactions>>["transactions"] = [];
-    let page = 0;
+      const startYear = 2015;
+      const now = new Date();
+      const endYear = now.getFullYear();
 
-    // Paginate forward through all available transactions
-    // Monzo returns oldest-first, so we advance `since` to the last ID each page
-    while (true) {
-      page++;
-      process.stdout.write(`  Fetching page ${page}...`);
+      for (let year = startYear; year <= endYear; year++) {
+        const since = `${year}-01-01T00:00:00Z`;
+        const before =
+          year === endYear
+            ? now.toISOString()
+            : `${year + 1}-01-01T00:00:00Z`;
 
-      const { transactions } = await fetchTransactions({
-        accountId,
-        since,
-        limit: PAGE_SIZE,
-      });
+        process.stdout.write(`  ${year}...`);
+        const txns = await fetchAllInWindow(accountId, since, before);
+        console.log(` ${txns.length} transactions`);
 
-      console.log(` ${transactions.length} transactions`);
-      allNew.push(...transactions);
-
-      if (transactions.length < PAGE_SIZE) break;
-
-      // Use the last transaction's ID as cursor for the next page
-      since = transactions[transactions.length - 1].id;
+        allNew.push(...txns);
+      }
     }
 
     if (allNew.length === 0) {
