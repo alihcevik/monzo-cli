@@ -6,6 +6,7 @@ import {
   saveTransactionStore,
   mergeTransactions,
 } from "../config/transaction-store.js";
+import { MonzoApiError } from "../utils/errors.js";
 import type { Transaction } from "../api/types.js";
 
 const PAGE_SIZE = 100;
@@ -35,6 +36,30 @@ async function fetchAllInWindow(
   return results;
 }
 
+function generateHalfYearWindows(startYear: number, now: Date): { since: string; before: string; label: string }[] {
+  const windows: { since: string; before: string; label: string }[] = [];
+  const endYear = now.getFullYear();
+
+  for (let year = startYear; year <= endYear; year++) {
+    // First half: Jan 1 - Jul 1
+    const h1Since = `${year}-01-01T00:00:00Z`;
+    const h1Before = `${year}-07-01T00:00:00Z`;
+
+    // Second half: Jul 1 - Jan 1 next year
+    const h2Since = `${year}-07-01T00:00:00Z`;
+    const h2Before = year === endYear ? now.toISOString() : `${year + 1}-01-01T00:00:00Z`;
+
+    if (new Date(h1Since) < now) {
+      windows.push({ since: h1Since, before: new Date(h1Before) < now ? h1Before : now.toISOString(), label: `${year} H1` });
+    }
+    if (new Date(h2Since) < now) {
+      windows.push({ since: h2Since, before: new Date(h2Before) < now ? h2Before : now.toISOString(), label: `${year} H2` });
+    }
+  }
+
+  return windows;
+}
+
 export const syncCommand = new Command("sync")
   .description("Sync transactions to local storage for offline access")
   .option("-a, --account <id>", "Account ID")
@@ -49,7 +74,6 @@ export const syncCommand = new Command("sync")
     let allNew: Transaction[] = [];
 
     if (isIncremental) {
-      // Incremental: single fetch from last cursor to now
       console.log(`Incremental sync...`);
       let cursor: string = store.last_synced!;
 
@@ -67,25 +91,24 @@ export const syncCommand = new Command("sync")
         cursor = transactions[transactions.length - 1].id;
       }
     } else {
-      // Full sync: chunk by year to avoid Monzo's ~1 year range limit
+      // Full sync: chunk by 6 months to stay under Monzo's ~8760h range limit
       console.log("Full sync — this may take a moment...");
 
-      const startYear = 2015;
-      const now = new Date();
-      const endYear = now.getFullYear();
+      const windows = generateHalfYearWindows(2015, new Date());
 
-      for (let year = startYear; year <= endYear; year++) {
-        const since = `${year}-01-01T00:00:00Z`;
-        const before =
-          year === endYear
-            ? now.toISOString()
-            : `${year + 1}-01-01T00:00:00Z`;
-
-        process.stdout.write(`  ${year}...`);
-        const txns = await fetchAllInWindow(accountId, since, before);
-        console.log(` ${txns.length} transactions`);
-
-        allNew.push(...txns);
+      for (const { since, before, label } of windows) {
+        process.stdout.write(`  ${label}...`);
+        try {
+          const txns = await fetchAllInWindow(accountId, since, before);
+          console.log(` ${txns.length} transactions`);
+          allNew.push(...txns);
+        } catch (err) {
+          if (err instanceof MonzoApiError && err.status === 403) {
+            console.log(` skipped (SCA restricted)`);
+            continue;
+          }
+          throw err;
+        }
       }
     }
 
@@ -100,7 +123,6 @@ export const syncCommand = new Command("sync")
       allNew,
     );
 
-    // Store the newest transaction's ID as cursor for next incremental sync
     const newestId = merged[0]?.id;
 
     saveTransactionStore({
