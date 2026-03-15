@@ -18,11 +18,14 @@ export const syncCommand = new Command("sync")
     const store = loadTransactionStore();
 
     // Determine start point for incremental sync
+    // Monzo requires an explicit `since` to go back further than recent history.
+    // For full sync, use a date before Monzo existed to get everything.
     let since: string | undefined;
     if (!opts.full && store.last_synced && store.account_id === accountId) {
       since = store.last_synced;
       console.log(`Incremental sync from ${since}...`);
     } else {
+      since = "2015-01-01T00:00:00Z";
       console.log("Full sync — this may take a moment...");
     }
 
