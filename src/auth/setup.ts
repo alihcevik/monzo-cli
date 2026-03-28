@@ -9,8 +9,23 @@ async function prompt(rl: ReturnType<typeof createInterface>, question: string, 
   return answer || existing || "";
 }
 
-export async function ensureSetup(forceReset = false): Promise<Config> {
+interface InlineCredentials {
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+}
+
+export async function ensureSetup(forceReset = false, inline?: InlineCredentials): Promise<Config> {
   const config = loadConfig();
+
+  // If all credentials provided inline, save and return immediately
+  if (inline?.clientId && inline?.clientSecret) {
+    return updateConfig({
+      client_id: inline.clientId,
+      client_secret: inline.clientSecret,
+      redirect_uri: inline.redirectUri || "http://localhost:7272/callback",
+    });
+  }
 
   if (!forceReset && config.client_id && config.client_secret && config.redirect_uri) {
     return config;

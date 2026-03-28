@@ -1,9 +1,16 @@
 import { Command } from "commander";
-import { clearTokens, loadConfig } from "../config/store.js";
+import { clearTokens, loadConfig, purgeAll } from "../config/store.js";
 
 export const logoutCommand = new Command("logout")
   .description("Clear stored authentication tokens")
-  .action(async () => {
+  .option("--purge", "Delete all config, tokens, and local transaction data")
+  .action(async (opts: { purge?: boolean }) => {
+    if (opts.purge) {
+      purgeAll();
+      console.log("All monzo-cli data deleted.");
+      return;
+    }
+
     const config = loadConfig();
     if (!config.access_token) {
       console.log("Not currently logged in.");

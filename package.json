@@ -8,7 +8,8 @@
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "link-cli": "tsup && pnpm link --global"
   },
   "keywords": [
     "monzo",

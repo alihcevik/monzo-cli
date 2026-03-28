@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, renameSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, writeFileSync, readFileSync, chmodSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 import { randomBytes } from "node:crypto";
@@ -63,4 +63,11 @@ export function clearTokens(): void {
   delete config.refresh_token;
   delete config.expires_at;
   saveConfig(config);
+}
+
+export function purgeAll(): void {
+  const dir = getConfigDir();
+  if (existsSync(dir)) {
+    rmSync(dir, { recursive: true });
+  }
 }

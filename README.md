@@ -10,23 +10,47 @@ Requires Node.js 18+ and pnpm.
 git clone https://github.com/alihcevik/monzo-cli.git
 cd monzo-cli
 pnpm install
-pnpm build
-pnpm link --global  # makes `monzo` available globally
+pnpm link-cli
+```
+
+This builds the project and links `monzo` as a global command. If you update the source, run `pnpm link-cli` again.
+
+To uninstall:
+
+```bash
+pnpm unlink --global
 ```
 
 ## Setup
 
-1. Go to https://developers.monzo.com/ and sign in
-2. Click **Clients** then **New OAuth Client**
-3. Fill in the form:
+You need a Monzo OAuth client to authenticate. Create one at https://developers.monzo.com/:
+
+1. Sign in and click **Clients** → **New OAuth Client**
+2. Fill in the form:
    - **Name**: anything (e.g. "My CLI")
    - **Logo URL**: leave blank
    - **Redirect URLs**: `http://localhost:7272/callback`
    - **Description**: leave blank
    - **Confidentiality**: select **Confidential**
-4. Run `monzo login` and paste your Client ID and Client Secret when prompted
+3. You may need to approve the new client in your Monzo app — check for a notification.
 
-On a headless server (no browser), use `monzo login --remote` — it will print an auth URL for you to open elsewhere, then you paste the code back.
+Then log in using one of these methods:
+
+```bash
+# Interactive — prompts for credentials on first run
+monzo login
+
+# Inline — pass credentials directly (skips prompts)
+monzo login --client-id oauth2client_xxx --client-secret mnzconf.xxx
+
+# Headless — prints an auth URL, you paste the code back
+monzo login --remote
+
+# Re-enter credentials
+monzo login --reset
+```
+
+After running `monzo login`, you'll need to approve the login in your Monzo app.
 
 ## Commands
 
@@ -45,15 +69,6 @@ Run `monzo <command> --help` for details on each command.
 ### Examples
 
 ```bash
-# Log in (opens browser)
-monzo login
-
-# Log in on a remote server (paste code manually)
-monzo login --remote
-
-# Re-enter client credentials
-monzo login --reset
-
 # Show balance
 monzo balance
 
@@ -66,17 +81,22 @@ monzo transactions --since 2025-01-01 --before 2025-02-01
 # Sync all transactions locally
 monzo sync
 
+# Full re-sync from the beginning
+monzo sync --full
+
 # View synced transactions offline
 monzo transactions --local
 ```
 
-## Token management
+## How it works
 
-Tokens are stored in `~/.config/monzo-cli/config.json` with `0600` permissions. Access tokens are automatically refreshed when they expire — you shouldn't need to re-login unless you revoke access.
+**Authentication**: Uses OAuth 2.0 authorization code flow. A local server on port 7272 captures the redirect. Tokens auto-refresh before expiry.
 
-## Transaction sync
+**Transactions**: Fetches all matching transactions using cursor-based pagination (100 per page). The `--limit` flag trims the result after fetching.
 
-Monzo restricts API access to transactions older than 90 days after Strong Customer Authentication (SCA). Run `monzo sync` while you have full access to save your transaction history locally. After the 90-day window closes, use `monzo transactions --local` to query saved data.
+**Sync**: Downloads your full transaction history to `~/.config/monzo-cli/transactions.json`. Incremental by default — only fetches new transactions since the last sync. Use `--full` to re-sync everything (walks history in 6-month chunks to stay within Monzo's API range limit). Gracefully skips 403 errors for SCA-restricted date ranges.
+
+**Local storage**: Config and tokens live in `~/.config/monzo-cli/config.json` (0600 permissions). Monzo restricts API access to transactions older than 90 days after SCA, so run `monzo sync` while you have access, then query offline with `monzo transactions --local`.
 
 ## License
 

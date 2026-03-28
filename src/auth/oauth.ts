@@ -57,8 +57,14 @@ async function exchangeCode(
   return (await res.json()) as TokenResponse;
 }
 
-export async function login(remote: boolean, reset = false): Promise<void> {
-  const config = await ensureSetup(reset);
+export interface InlineCredentials {
+  clientId?: string;
+  clientSecret?: string;
+  redirectUri?: string;
+}
+
+export async function login(remote: boolean, reset = false, inline?: InlineCredentials): Promise<void> {
+  const config = await ensureSetup(reset, inline);
   const { client_id, client_secret, redirect_uri } = config;
 
   if (!client_id || !client_secret || !redirect_uri) {
@@ -110,5 +116,5 @@ export async function login(remote: boolean, reset = false): Promise<void> {
   storeTokens(token);
 
   console.log("\nLogged in successfully!");
-  console.log("You may need to approve this login in your Monzo app.");
+  console.log("Most likely, you will need to approve this login in your Monzo app. Check your app for a notification and approve it.");
 }
