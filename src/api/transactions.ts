@@ -1,5 +1,5 @@
 import { monzoGet } from "./client.js";
-import type { TransactionsResponse } from "./types.js";
+import type { Transaction, TransactionsResponse } from "./types.js";
 
 export interface FetchTransactionsOpts {
   accountId: string;
@@ -20,4 +20,34 @@ export async function fetchTransactions(
   if (opts.limit) params.limit = String(opts.limit);
 
   return monzoGet<TransactionsResponse>("/transactions", params);
+}
+
+const PAGE_SIZE = 100;
+
+export async function fetchAllTransactions(
+  opts: Omit<FetchTransactionsOpts, "limit">,
+): Promise<Transaction[]> {
+  const all: Transaction[] = [];
+  let cursor: string | undefined = opts.since;
+
+  while (true) {
+    const params: Record<string, string> = {
+      account_id: opts.accountId,
+      "expand[]": "merchant",
+      limit: String(PAGE_SIZE),
+    };
+    if (cursor) params.since = cursor;
+    if (opts.before) params.before = opts.before;
+
+    const data = await monzoGet<TransactionsResponse>("/transactions", params);
+    const page = data.transactions;
+
+    all.push(...page);
+
+    if (page.length < PAGE_SIZE) break;
+
+    cursor = page[page.length - 1].id;
+  }
+
+  return all;
 }

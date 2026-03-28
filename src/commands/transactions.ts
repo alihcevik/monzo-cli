@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { fetchTransactions } from "../api/transactions.js";
+import { fetchAllTransactions, fetchTransactions } from "../api/transactions.js";
 import { resolveAccountId } from "./shared.js";
 import { formatCurrency, formatDateTime, printTable } from "../utils/format.js";
 import { MonzoApiError } from "../utils/errors.js";
@@ -76,13 +76,11 @@ export const transactionsCommand = new Command("transactions")
 
       let txns: Transaction[];
       try {
-        const data = await fetchTransactions({
+        txns = await fetchAllTransactions({
           accountId,
           since: opts.since,
           before: opts.before,
-          limit,
         });
-        txns = data.transactions;
       } catch (err) {
         if (err instanceof MonzoApiError && err.status === 403) {
           console.error(
@@ -100,6 +98,6 @@ export const transactionsCommand = new Command("transactions")
         throw err;
       }
 
-      displayTransactions(txns);
+      displayTransactions(txns.slice(0, limit));
     },
   );
